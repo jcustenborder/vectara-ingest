@@ -467,9 +467,14 @@ attachment API and index them in Vectara as well.
 
 - `servicenow_instance_url`: The base URL of the ServiceNow instance (e.g., "https://dev12345.service-now.com/").
 - `servicenow_process_attachments`: Boolean flag indicating whether to retrieve and index file attachments in addition to the article content.
-- `servicenow_batch_size` (if present): The number of articles to fetch in each API call. Default: 100.
-- `servicenow_table` (if present):The ServiceNow table to query for articles. Default: `"kb_knowledge"`.
-- `servicenow_query` (if present): A query (e.g., `sysparm_query`) for filtering the knowledge-base articles returned by the ServiceNow API.
+- `servicenow_batch_size`: The number of articles to fetch in each API call. Default: 100.
+- `servicenow_table`: The ServiceNow table to query for articles. Default: `"kb_knowledge"`.
+- `servicenow_query`: A query (e.g., `sysparm_query`) for filtering the knowledge-base articles returned by the ServiceNow API.
+- `servicenow_auth_type`: The type of authentication to use. `password` - Username and password authentication. `oauth` - OAUTH authentication is used. Default: oauth
+- `servicenow_username`: Username to connect to ServiceNow with. Required for both `password` and `oauth` authentication types. Place `servicenow_username=<username>` in secrets.toml
+- `servicenow_password`: Password to connect to ServiceNow with. Required for both `password` and `oauth` authentication types. Place `servicenow_password=<password>` in secrets.toml
+- `servicenow_client_id`: Oauth client id, required when `servicenow_auth_type=oauth`. Place `servicenow_client_id=<client id>` in secrets.toml 
+- `servicenow_client_secret`: Client secret, required when `servicenow_auth_type=oauth`.   Place `servicenow_client_secret=<client_secret>` in secrets.toml
 
 - **[Table API Reference](https://developer.servicenow.com/dev.do#!/reference/api/rome/rest/c_TableAPI)**  
   Contains details on the various endpoints, query parameters, and usage examples for retrieving data from ServiceNow tables.

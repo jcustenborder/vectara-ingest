@@ -9,4 +9,5 @@ crawling:
 servicenow_crawler:
   servicenow_instance_url: "https://dev189594.service-now.com/"
   servicenow_process_attachments: true
+  servicenow_auth_type: oauth
   servicenow_table:

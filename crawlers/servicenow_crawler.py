@@ -1,5 +1,7 @@
 import logging
 
+import requests.auth
+
 from core.crawler import Crawler
 from core.utils import create_session_with_retries
 import os.path
@@ -18,7 +20,109 @@ def is_supported_file(file_name:str)->bool:
     return file_extension.lower() in supported_extensions
 
 
+class ServiceNowAuth(requests.auth.AuthBase):
+    """
+    Custom authentication class for ServiceNow API requests using OAuth Bearer Token.
+
+    This class extends `requests.auth.AuthBase` to allow authentication with an OAuth token.
+    It automatically adds the required `Authorization` header to outgoing requests.
+
+    Attributes:
+        token (str): The OAuth access token used for authentication.
+
+    Methods:
+        __call__(self, r):
+            Modifies the request by adding the `Authorization` header with the Bearer token.
+
+    Example Usage:
+        ```python
+        auth = ServiceNowAuth("your_access_token")
+        response = requests.get("https://your-instance.service-now.com/api/now/table/kb_knowledge", auth=auth)
+        ```
+    """
+    def __init__(self, auth_token:str):
+        """
+        Initialize the authentication class with an OAuth token.
+
+        Args:
+            auth_token (str): The OAuth access token.
+        """
+        self.token = auth_token
+
+    def __call__(self, r):
+        """
+        Modify the request to include the OAuth Bearer token in the Authorization header.
+
+        Args:
+            r (requests.PreparedRequest): The outgoing request object.
+
+        Returns:
+            requests.PreparedRequest: The modified request with the Authorization header.
+        """
+        r.headers["authorization"] = f"Bearer {self.token}"
+        return r
+
 class ServicenowCrawler(Crawler):
+
+    def setup_auth(self):
+        """
+        Set up authentication for the ServiceNow crawler.
+
+        This method configures authentication based on the specified authentication type in the
+        ServiceNow crawler configuration. It supports both password-based authentication and OAuth authentication.
+
+        Returns:
+            tuple or ServiceNowAuth:
+                - A tuple (username, password) if using password authentication.
+                - An instance of ServiceNowAuth containing a bearer token if using OAuth authentication.
+
+        Raises:
+            Exception: If an unsupported authentication type is specified.
+
+        Authentication Types:
+            - 'password': Uses basic authentication with a username and password.
+            - 'oauth': Requests an OAuth token using client credentials and username/password.
+
+        Example:
+            ```python
+            crawler = ServicenowCrawler()
+            auth = crawler.setup_auth()
+            ```
+
+        Logs:
+            - Logs an info message when fetching an OAuth token.
+            - Raises an exception if an unsupported authentication type is encountered.
+        """
+        auth_type = self.cfg.servicenow_crawler.get('servicenow_auth_type', 'password')
+        auth = None
+        match auth_type:
+            case 'password':
+                auth = (
+                    self.cfg.servicenow_crawler.servicenow_username,
+                    self.cfg.servicenow_crawler.servicenow_password
+                )
+            case 'oauth':
+                auth_token_url = self.new_url('/oauth_token.do')
+                payload = {
+                    "grant_type": "password",
+                    "client_id": self.cfg.servicenow_crawler.servicenow_client_id,
+                    "client_secret": self.cfg.servicenow_crawler.servicenow_client_secret,
+                    "username": self.cfg.servicenow_crawler.servicenow_username,
+                    "password": self.cfg.servicenow_crawler.servicenow_password
+                }
+                headers = {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+                logging.info(f"Calling {auth_token_url.url} to get oauth token")
+                auth_token_response = requests.post(auth_token_url.url, data=payload, headers=headers)
+                auth_token_response.raise_for_status()
+                auth_token_data = auth_token_response.json()
+                auth = ServiceNowAuth(auth_token_data['access_token'])
+            case _:
+                raise Exception(f"Unsupported servicenow_auth_type:{auth_type}")
+        return auth
+
+
     def new_url(self, /, *paths)-> furl:
         """
         Construct a new URL by copying the base_url and appending additional path segments.
@@ -33,6 +137,7 @@ class ServicenowCrawler(Crawler):
         for p in paths:
             result.path = os.path.join(str(result.path), str(p))
         return result
+
 
     def crawl(self) -> None:
         """
@@ -59,17 +164,14 @@ class ServicenowCrawler(Crawler):
         """
         self.session = create_session_with_retries()
         self.base_url = furl(self.cfg.servicenow_crawler.servicenow_instance_url)
+        self.servicenow_auth = self.setup_auth()
         self.servicenow_headers = {"Accept": "application/json"}
-        self.servicenow_auth = (
-            self.cfg.servicenow_crawler.servicenow_username,
-            self.cfg.servicenow_crawler.servicenow_password
-        )
         self.user_cache = {}
 
         skip_fields = self.cfg.servicenow_crawler.get('servicenow_ignore_fields', {'text', 'short_description'})
         page_size = self.cfg.servicenow_crawler.get('servicenow_pagesize', 100)
 
-        table = 'kb_knowledge'
+        table = self.cfg.servicenow_crawler.get('', 'kb_knowledge')
         kb_url = self.new_url('/kb_view.do')
         list_articles_url = self.new_url('/api/now/table', table)
         if 'servicenow_query' in self.cfg.servicenow_crawler:
