@@ -255,6 +255,10 @@ doc_processing:
     'num_pages': 'number of pages in this document'
     'date': 'date of this document'
 
+  # Threshold in MB before the PDF file will be split into smaller files.
+  max_pdf_size: 50
+  # When the PDF document is split for processing, the number of pages per split PDF.
+  pages_per_pdf: 100
 
 crawling:
   # type of crawler; valid options are website, docusaurus, notion, jira, rss, mediawiki, discourse, github and others (this continues to evolve as new crawler types are added)
